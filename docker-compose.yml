@@ -1,0 +1,61 @@
+# Uji lokal seluruh stack, atau referensi untuk Coolify (Docker Compose resource).
+# Nilai rahasia diisi lewat file .env di folder yang sama, atau langsung di UI Coolify.
+#
+#   docker compose up --build
+#   web  -> http://localhost:8080
+#   api  -> http://localhost:8000 (hanya untuk pemeriksaan; di produksi cukup lewat proxy)
+
+name: financa
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: financa
+      MARIADB_USER: financa
+      MARIADB_PASSWORD: ${MYSQL_PASSWORD:?isi MYSQL_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?isi MYSQL_ROOT_PASSWORD}
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Karakter khusus di password harus di-percent-encode (mis. @ jadi %40).
+      DATABASE_URL: mysql://financa:${MYSQL_PASSWORD}@db:3306/financa
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      FRONTEND_RESET_URL: ${FRONTEND_RESET_URL:-http://localhost:8080/reset}
+      SMTP_URL: ${SMTP_URL:-}
+      SMTP_DARI: ${SMTP_DARI:-noreply@financa.local}
+    volumes:
+      - bukti:/app/storage
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Alamat API yang diakses browser (bukan alamat internal container).
+        PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+        PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  db:
+  bukti:

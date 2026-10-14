@@ -1,0 +1,10 @@
+target
+target-ocr
+models
+storage
+.env
+.env.*
+!.env.example
+bash.exe.stackdump
+*.stackdump
+tests
