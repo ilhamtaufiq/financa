@@ -1,0 +1,12 @@
+---
+import App from '../layouts/App.astro';
+import Merek from '../components/Merek.astro';
+import FormDaftar from '../components/islands/FormDaftar.tsx';
+---
+
+<App judul="Daftar" polos>
+  <div class="flex w-full flex-col gap-8">
+    <Merek />
+    <FormDaftar client:load />
+  </div>
+</App>

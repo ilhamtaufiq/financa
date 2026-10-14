@@ -1,0 +1,12 @@
+---
+import App from '../layouts/App.astro';
+import Merek from '../components/Merek.astro';
+import FormSesi from '../components/islands/FormSesi.tsx';
+---
+
+<App judul="Masuk" polos>
+  <div class="flex w-full flex-col gap-8">
+    <Merek />
+    <FormSesi client:load />
+  </div>
+</App>

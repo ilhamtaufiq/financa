@@ -1,0 +1,12 @@
+---
+import App from '../layouts/App.astro';
+import Merek from '../components/Merek.astro';
+import ResetSandi from '../components/islands/ResetSandi.tsx';
+---
+
+<App judul="Reset kata sandi" polos>
+  <div class="flex w-full flex-col gap-8">
+    <Merek />
+    <ResetSandi client:load />
+  </div>
+</App>

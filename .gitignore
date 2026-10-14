@@ -1,0 +1,5 @@
+# Berkas lokal dan tooling yang tidak ikut repo
+*.stackdump
+.claude/
+.agents/
+skills-lock.json

@@ -1,0 +1,92 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  judul: string;
+  deskripsi: string;
+}
+
+const { judul, deskripsi } = Astro.props;
+
+// URL absolut hanya tersedia jika PUBLIC_SITE_URL diisi saat build (lihat astro.config.mjs).
+// Tanpa itu, canonical dan Open Graph url/gambar dilewati daripada diisi alamat yang salah.
+const situs = Astro.site;
+const url = situs ? new URL(Astro.url.pathname, situs).href : undefined;
+const gambarOg = situs ? new URL('/og.png', situs).href : undefined;
+const judulLengkap = `Financa - ${judul}`;
+
+const dataTerstruktur = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Financa',
+  applicationCategory: 'FinanceApplication',
+  operatingSystem: 'Web',
+  inLanguage: 'id',
+  description: deskripsi,
+  ...(url ? { url } : {}),
+  publisher: { '@type': 'Organization', name: 'Cendera' },
+};
+---
+
+<!doctype html>
+<html lang="id" data-tema="terang">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={deskripsi} />
+    <meta name="theme-color" content="#fcf9f8" />
+    {url && <link rel="canonical" href={url} />}
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/ikon.svg" type="image/svg+xml" />
+    <title>{judulLengkap}</title>
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Financa" />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:title" content={judulLengkap} />
+    <meta property="og:description" content={deskripsi} />
+    {url && <meta property="og:url" content={url} />}
+    {gambarOg && <meta property="og:image" content={gambarOg} />}
+    {gambarOg && <meta property="og:image:width" content="1200" />}
+    {gambarOg && <meta property="og:image:height" content="630" />}
+    {gambarOg && <meta property="og:image:alt" content="Financa: buku kas yang tetap jalan tanpa sinyal" />}
+    <meta name="twitter:card" content={gambarOg ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={judulLengkap} />
+    <meta name="twitter:description" content={deskripsi} />
+    {gambarOg && <meta name="twitter:image" content={gambarOg} />}
+
+    <script type="application/ld+json" set:html={JSON.stringify(dataTerstruktur)} />
+    {
+      import.meta.env.PROD && (
+        <meta
+          http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' __CSP_SCRIPT_HASHES__; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https:; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        />
+      )
+    }
+  </head>
+  <body class="min-h-screen">
+    <header class="sticky top-0 z-10 bg-latar/80 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl">
+      <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 md:px-8">
+        <a href="/" class="flex items-center gap-3">
+          <img src="/ikon.svg" alt="" width="36" height="36" class="size-9 rounded-xl" />
+          <span class="text-lg font-extrabold tracking-tight">Financa</span>
+        </a>
+        <nav aria-label="Akun" class="flex gap-2">
+          <a href="/masuk" class="tombol-sentuh text-sm text-teks hover:text-cendera">Masuk</a>
+          <a href="/daftar" class="tombol-utama text-sm">Daftar</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-5xl space-y-20 px-4 py-12 md:space-y-24 md:px-8 md:py-20">
+      <slot />
+    </main>
+
+    <footer class="border-t border-garis">
+      <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-redup md:px-8">
+        <p>&copy; {new Date().getFullYear()} Financa. Dibuat oleh Cendera, Cianjur Space.</p>
+      </div>
+    </footer>
+  </body>
+</html>

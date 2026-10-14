@@ -1,0 +1,15 @@
+{
+  "name": "Financa",
+  "short_name": "Financa",
+  "description": "Pencatatan dan laporan keuangan untuk perorangan atau pelaku usaha (Cendera).",
+  "lang": "id",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": [
+    { "src": "/ikon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

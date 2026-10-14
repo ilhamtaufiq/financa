@@ -1,0 +1,81 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  judul: string;
+  /** Layout dipusatkan tanpa chrome aplikasi. Dipakai di halaman masuk, daftar, reset, dan offline. */
+  polos?: boolean;
+}
+
+const { judul, polos = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="id" data-tema="terang">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#fcf9f8" />
+    <!-- Halaman privat dan halaman sesi: jangan masuk indeks pencarian. Tetap boleh di-crawl supaya noindex terbaca. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- Token sesi ada di localStorage, jadi skrip asing tidak boleh berjalan di halaman ini.
+         Hanya di produksi: di dev, Astro memakai skrip inline untuk HMR. Hash skrip inline
+         diisi oleh integrasi csp-hash di astro.config.mjs saat build.
+         connect-src dibuka untuk alamat API yang dikonfigurasi pengguna (http/https). -->
+    {
+      import.meta.env.PROD && (
+        <meta
+          http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' __CSP_SCRIPT_HASHES__; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https:; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        />
+      )
+    }
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/ikon.svg" type="image/svg+xml" />
+    <title>Financa - {judul}</title>
+  </head>
+
+  <body class={polos ? 'relative min-h-screen overflow-x-hidden' : 'min-h-screen bg-latar text-teks'}>
+    {
+      polos && (
+        <div
+          aria-hidden="true"
+          class="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[480px] bg-[radial-gradient(ellipse_at_top,_rgba(141,247,143,0.30),_transparent_70%)]"
+        />
+      )
+    }
+
+    {
+      polos ? (
+        <main class="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center px-5 py-10">
+          <slot />
+        </main>
+      ) : (
+        <slot />
+      )
+    }
+  </body>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      if (import.meta.env.DEV) {
+        // Saat pengembangan, service worker membuat perubahan kode tidak langsung tampil. Hapus yang sudah terpasang.
+        navigator.serviceWorker.getRegistrations().then((daftar) => daftar.forEach((r) => r.unregister()));
+        if ('caches' in window) caches.keys().then((kunci) => kunci.forEach((k) => caches.delete(k)));
+      } else {
+        // Versi baru mengambil alih setelah deploy: muat ulang sekali supaya halaman yang terbuka ikut diperbarui.
+        // Hanya jika sebelumnya sudah ada service worker, supaya kunjungan pertama tidak reload.
+        const sudahAda = Boolean(navigator.serviceWorker.controller);
+        let sudahMuatUlang = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!sudahAda || sudahMuatUlang) return;
+          sudahMuatUlang = true;
+          window.location.reload();
+        });
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    }
+  </script>
+</html>

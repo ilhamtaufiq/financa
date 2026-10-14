@@ -1,0 +1,22 @@
+---
+import App from '../../layouts/App.astro';
+import Aplikasi from '../../app/Aplikasi.tsx';
+import { HALAMAN } from '../../app/halaman';
+
+// Setiap rute di /app dibuat sebagai HTML statis yang memuat SPA React yang sama.
+// Dengan begitu tautan langsung dan refresh di browser tetap berfungsi.
+// Judul awal tiap halaman diisi di sini. Setelah SPA aktif, Shell.tsx memperbaruinya saat pengguna berpindah menu.
+// Daftar halaman diimpor, bukan ditulis di frontmatter, karena getStaticPaths() tidak bisa membaca variabel frontmatter.
+export function getStaticPaths() {
+  return HALAMAN.map((h) => ({
+    params: { ruta: h.ruta || undefined },
+    props: { judul: h.judul },
+  }));
+}
+
+const { judul } = Astro.props;
+---
+
+<App judul={judul}>
+  <Aplikasi client:only="react" />
+</App>

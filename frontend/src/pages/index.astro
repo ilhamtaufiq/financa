@@ -1,0 +1,175 @@
+---
+import Landing from '../layouts/Landing.astro';
+
+// Contoh buku kas untuk ilustrasi. Saldo dihitung berurutan dari saldo awal.
+const buku = [
+  { tgl: '11 Okt', ket: 'Penjualan kios', jumlah: '+1.250.000', masuk: true, saldo: '4.820.000' },
+  { tgl: '11 Okt', ket: 'Bahan baku', jumlah: '−860.000', masuk: false, saldo: '3.960.000' },
+  { tgl: '12 Okt', ket: 'Listrik', jumlah: '−485.000', masuk: false, saldo: '3.475.000' },
+  { tgl: '12 Okt', ket: 'Setor ke BCA', jumlah: '−500.000', masuk: false, saldo: '2.975.000' },
+  { tgl: '13 Okt', ket: 'Jasa desain', jumlah: '+750.000', masuk: true, saldo: '3.725.000' },
+];
+
+// Setiap fitur nyata di aplikasi. Judul menyebut hasil untuk pengguna, deskripsi menjelaskan cara kerjanya.
+// Warna pastel diambil bergilir dari palet aplikasi.
+const warna = [
+  { latar: '#e4f5d8', teks: '#2f7a1f' },
+  { latar: '#f6e3fa', teks: '#a63fc0' },
+  { latar: '#dbe8fb', teks: '#2f6fdb' },
+  { latar: '#f7efc9', teks: '#b5901c' },
+  { latar: '#fde3e3', teks: '#c2410c' },
+];
+
+const fitur = [
+  {
+    judul: 'Foto struk, form terisi',
+    isi: 'Ambil foto struk. Jumlah, tanggal, dan nama toko terisi untuk Anda periksa sebelum disimpan.',
+    ikon: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  },
+  {
+    judul: 'Mencatat tanpa sinyal',
+    isi: 'Transaksi tersimpan di ponsel lebih dulu, lalu terkirim sendiri saat Anda online lagi.',
+    ikon: 'M12 20h.01M8.5 16.5a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 14 0',
+  },
+  {
+    judul: 'Saldo tiap rekening, jelas',
+    isi: 'Kas, bank, atau rekening lain punya saldo masing-masing, dihitung dari setiap transaksi.',
+    ikon: 'M3 7h18v12H3zM3 7l2-3h14M16 13h2',
+  },
+  {
+    judul: 'Laporan tanpa spreadsheet',
+    isi: 'Lihat pemasukan, pengeluaran, dan laba rugi per kategori, dibandingkan dengan bulan lalu.',
+    ikon: 'M3 21h18M7 17v-4M12 17V7M17 17v-7',
+  },
+  {
+    judul: 'Perkiraan akhir bulan',
+    isi: 'Dihitung dari rata-rata tiga bulan terakhir. Ini perkiraan dari pola catatan, bukan ramalan.',
+    ikon: 'M3 17l6-6 4 4 8-8M15 7h6v6',
+  },
+  {
+    judul: 'Bukti tersimpan rapi',
+    isi: 'Lampirkan foto atau PDF ke transaksi, supaya Anda tidak perlu mencari struknya lagi.',
+    ikon: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',
+  },
+  {
+    judul: 'Ekspor ke Excel',
+    isi: 'Unduh transaksi dan laba rugi dalam CSV yang langsung bisa dibuka di Excel.',
+    ikon: 'M12 3v12M7 10l5 5 5-5M4 21h16',
+  },
+  {
+    judul: 'Satu akun, banyak organisasi',
+    isi: 'Pisahkan catatan pribadi dan usaha. Pindah organisasi kapan saja dari Pengaturan.',
+    ikon: 'M4 21V8l8-5 8 5v13M9 21v-6h6v6',
+  },
+];
+
+const langkah = [
+  { judul: 'Buat akun', isi: 'Isi nama, email, dan kata sandi.' },
+  { judul: 'Tambah rekening', isi: 'Mulai dari kas atau rekening bank yang paling sering Anda pakai.' },
+  { judul: 'Catat transaksi', isi: 'Catat yang pertama hari ini, lalu buka Laporan di akhir bulan.' },
+];
+---
+
+<Landing
+  judul="Aplikasi Pencatatan Kas Usaha Kecil, Bisa Offline"
+  deskripsi="Catat pemasukan dan pengeluaran, foto struk untuk mengisi form, dan lihat laporan bulanan. Tetap bisa dipakai tanpa sinyal, untuk perorangan dan usaha kecil."
+>
+  <section class="grid items-center gap-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] md:gap-16">
+    <div class="space-y-8">
+      <h1 class="judul-ungu text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl md:text-6xl">
+        Buku kas yang tetap jalan, bahkan tanpa sinyal.
+      </h1>
+      <p class="max-w-prose text-lg leading-relaxed text-redup">
+        Catat pemasukan dan pengeluaran, foto struk untuk mengisi form, lalu lihat laporan bulanan tanpa membuka
+        spreadsheet. Catatan tersimpan di ponsel dan terkirim sendiri saat sinyal kembali.
+      </p>
+      <div class="flex flex-col gap-3 sm:flex-row">
+        <a href="/daftar" class="tombol-utama min-h-14 px-7 text-base">Mulai mencatat</a>
+        <a href="/masuk" class="tombol-garis min-h-14 px-7 text-base">Masuk</a>
+      </div>
+    </div>
+
+    <figure class="space-y-3">
+      <figcaption class="flex items-baseline justify-between gap-4 text-sm text-redup">
+        <span>Contoh tampilan · Kas utama</span>
+        <span>Saldo <strong class="font-bold text-teks tabular-nums">Rp 3.725.000</strong></span>
+      </figcaption>
+      <div class="overflow-hidden rounded-[32px] bg-permukaan shadow-[0_8px_32px_-4px_rgba(166,63,192,0.08)]">
+        <table class="w-full text-sm tabular-nums">
+          <caption class="sr-only">Lima transaksi terakhir di kas utama</caption>
+          <thead>
+            <tr class="border-b border-garis text-left text-redup">
+              <th scope="col" class="px-5 py-3 font-semibold">Tanggal</th>
+              <th scope="col" class="px-2 py-3 font-semibold">Keterangan</th>
+              <th scope="col" class="px-5 py-3 text-right font-semibold">Jumlah</th>
+              <th scope="col" class="hidden px-5 py-3 text-right font-semibold sm:table-cell">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              buku.map((b) => (
+                <tr class="border-b border-garis last:border-0">
+                  <td class="whitespace-nowrap px-5 py-3.5 text-redup">{b.tgl}</td>
+                  <td class="px-2 py-3.5 font-medium">{b.ket}</td>
+                  <td class={`whitespace-nowrap px-5 py-3.5 text-right font-bold ${b.masuk ? 'text-[#1f6b3a]' : 'text-teks'}`}>{b.jumlah}</td>
+                  <td class="hidden whitespace-nowrap px-5 py-3.5 text-right text-redup sm:table-cell">{b.saldo}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </figure>
+  </section>
+
+  <section aria-labelledby="judul-fitur" class="space-y-8">
+    <div class="max-w-xl space-y-2">
+      <h2 id="judul-fitur" class="text-3xl font-bold tracking-tight">Satu aplikasi untuk seluruh catatan kas Anda</h2>
+      <p class="text-redup">Dari struk di tangan sampai laporan akhir bulan, semuanya ada di tempat yang sama.</p>
+    </div>
+    <ul class="grid gap-3 sm:grid-cols-2">
+      {
+        fitur.map((f, i) => (
+          <li class="flex gap-4 rounded-3xl bg-permukaan p-5 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.04)]">
+            <span
+              aria-hidden="true"
+              class="grid size-12 shrink-0 place-items-center rounded-2xl"
+              style={`background-color:${warna[i % warna.length].latar};color:${warna[i % warna.length].teks}`}
+            >
+              <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d={f.ikon} />
+              </svg>
+            </span>
+            <div class="min-w-0 space-y-1">
+              <h3 class="font-bold leading-tight">{f.judul}</h3>
+              <p class="text-sm leading-relaxed text-redup">{f.isi}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section aria-labelledby="judul-mulai" class="space-y-8">
+    <h2 id="judul-mulai" class="text-3xl font-bold tracking-tight">Mulai dalam tiga langkah</h2>
+    <ol class="grid gap-3 md:grid-cols-3">
+      {
+        langkah.map((l, i) => (
+          <li class="space-y-3 rounded-3xl bg-inset p-5">
+            <span class="grid size-10 place-items-center rounded-full bg-[#8df78f] text-lg font-bold tabular-nums text-[#002106]">{i + 1}</span>
+            <h3 class="text-lg font-bold">{l.judul}</h3>
+            <p class="text-sm leading-relaxed text-redup">{l.isi}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section class="space-y-5 rounded-[32px] bg-[#8df78f] p-8 text-[#002106] md:p-12">
+    <h2 class="max-w-xl text-3xl font-bold leading-tight tracking-tight md:text-4xl">Mulai dari satu transaksi hari ini.</h2>
+    <p class="max-w-prose">Buat akun, tambah rekening pertama, dan catat uang yang baru Anda terima atau keluarkan.</p>
+    <a href="/daftar" class="inline-flex min-h-14 items-center rounded-full bg-white px-7 text-base font-bold shadow-[0_8px_20px_-4px_rgba(0,33,6,0.25)] transition active:scale-95">
+      Buat akun
+    </a>
+  </section>
+</Landing>

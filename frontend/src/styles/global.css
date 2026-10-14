@@ -1,0 +1,184 @@
+/* Font dimuat dari paket lokal, jadi berjalan di bawah CSP default-src 'self'. */
+@import '@fontsource-variable/dm-sans';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Token warna dalam channel RGB. Tema gelap (default) untuk landing dan brand Cendera.
+ * Tema terang untuk aplikasi: atribut data-tema="terang" di <html>.
+ * Tombol hijau selalu berteks gelap (#0a0a0a), jadi tetap terbaca di kedua tema.
+ */
+:root {
+  color-scheme: dark;
+  --latar: 10 10 10;
+  --permukaan: 20 20 20;
+  --inset: 28 28 28;
+  --garis: 38 38 38;
+  --teks: 243 239 230;
+  --redup: 154 149 138;
+  --bahaya: 248 113 113;
+  --cendera: 0 212 14;
+  --cendera-600: 0 179 12;
+  --cendera-700: 6 122 16;
+  --bayangan: 0 20px 40px -20px rgb(0 0 0 / 0.6);
+}
+
+/* Tema terang mengikuti DESIGN.md "Luminescent Playful Wealth": canvas lavender, kartu putih, teks #1a1a1a. */
+[data-tema='terang'] {
+  color-scheme: light;
+  --latar: 252 249 248;
+  --permukaan: 255 255 255;
+  --inset: 246 243 242;
+  --garis: 236 232 231;
+  --ungu: 138 32 165;
+  --teks: 26 26 26;
+  --redup: 107 114 128;
+  --bahaya: 238 90 36;
+  /* Hijau pastel (mint #8df78f dari palet contoh) untuk elemen aktif dan aksi utama.
+     Teks hijau di atas putih memakai versi tua (cendera-700) supaya tetap terbaca. */
+  --cendera: 141 247 143;
+  --cendera-600: 113 221 122;
+  --cendera-700: 31 107 58;
+  --bayangan: 0 8px 32px -4px rgb(166 63 192 / 0.08);
+}
+
+/* Canvas contoh: putih hangat dengan sedikit semburat pink di bagian atas, bukan lavender penuh. */
+[data-tema='terang'] body {
+  background-image: radial-gradient(120% 40% at 50% 0%, #fdf1fb 0%, rgba(253, 241, 251, 0) 70%);
+  background-repeat: no-repeat;
+}
+
+/* Judul halaman dan tautan sekunder berwarna ungu, seperti pada contoh. */
+.judul-ungu {
+  color: rgb(var(--ungu, 138 32 165));
+}
+.tautan-ungu {
+  color: rgb(var(--ungu, 138 32 165));
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+.tautan-ungu:hover {
+  text-decoration: underline;
+}
+
+/* Tombol utama di tema terang: pill hijau Financa dengan teks gelap (putih di atas hijau ini kontrasnya rendah). */
+[data-tema='terang'] .tombol-utama {
+  background-color: rgb(var(--cendera));
+  color: #0a0a0a;
+  box-shadow: 0 8px 20px -4px rgb(113 221 122 / 0.55);
+}
+[data-tema='terang'] .tombol-utama:hover {
+  background-color: rgb(var(--cendera-600));
+}
+[data-tema='terang'] .tombol-garis {
+  border-color: rgb(var(--cendera));
+  color: rgb(var(--cendera-700));
+}
+
+/* Input: 56px, latar inset tanpa border, fokus berwarna lilac (DESIGN.md "Form Inputs"). */
+[data-tema='terang'] .masukan {
+  min-height: 56px;
+  border: 0;
+  border-radius: 1rem;
+  background-color: rgb(var(--inset));
+}
+[data-tema='terang'] .masukan:focus {
+  box-shadow: 0 0 0 2px #cf7fe3;
+  border-color: transparent;
+}
+
+/* Di tema terang, teks hijau memakai hijau yang lebih gelap supaya terbaca di latar putih. */
+[data-tema='terang'] .text-cendera {
+  color: rgb(var(--cendera-700));
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-latar font-sans text-teks antialiased;
+}
+
+/* Judul memakai font display. Lebar dan berat diatur per komponen. */
+h1,
+h2 {
+  @apply font-display;
+  font-optical-sizing: auto;
+}
+
+/*
+ * Kelas komponen berada di @layer components supaya utilitas Tailwind (pl-12, min-h-14, text-2xl, dan lain-lain)
+ * bisa menimpanya. Di luar layer, CSS ini muncul setelah utilitas dan selalu menang.
+ */
+@layer components {
+  /* Area sentuh minimal 44px. */
+  .tombol-sentuh {
+    @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-base font-semibold;
+  }
+  .tombol-utama {
+    @apply tombol-sentuh bg-cendera text-[#0a0a0a] shadow-lg shadow-cendera/25 transition duration-150 hover:bg-cendera-600 hover:shadow-cendera/40 active:translate-y-px active:bg-cendera-700 disabled:opacity-50 disabled:shadow-none;
+  }
+  .tombol-garis {
+    @apply tombol-sentuh border-2 border-cendera text-cendera hover:bg-permukaan disabled:opacity-50;
+  }
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  /* Hijau tua, bukan pastel: cincin fokus harus terlihat jelas di atas latar putih. */
+  outline: 3px solid #2f9e44;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@layer components {
+  .kartu {
+    @apply rounded-3xl border border-garis bg-permukaan p-5;
+    box-shadow: var(--bayangan);
+  }
+}
+
+/* Track bar: garis diagonal tipis di atas latar garis. Dipakai ProgressBar dan batang kategori. */
+.bar-garis {
+  background-color: rgb(var(--garis));
+  background-image: repeating-linear-gradient(135deg, rgb(var(--redup) / 0.22) 0 3px, transparent 3px 7px);
+}
+
+/* Animasi masuk modal. Hanya dipakai lewat motion-safe:, jadi mati untuk pengguna "kurangi gerakan". */
+@keyframes muncul {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes naik {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer components {
+  .label-form {
+    @apply mb-1 block text-sm font-bold text-teks;
+  }
+
+  .masukan {
+    @apply w-full min-h-[44px] rounded-xl border-2 border-garis bg-latar px-3 py-2.5 text-base text-teks placeholder:text-redup transition duration-150 focus:border-cendera focus:outline-none focus:ring-4 focus:ring-cendera/20;
+  }
+  .masukan[aria-invalid='true'] {
+    @apply border-bahaya focus:ring-bahaya/20;
+  }
+
+  .lencana-status {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold;
+  }
+}

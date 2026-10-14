@@ -1,0 +1,37 @@
+[package]
+name = "financa-api"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "financa_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "financa-api"
+path = "src/main.rs"
+
+[dependencies]
+argon2 = "0.5"
+axum = { version = "0.8", features = ["multipart"] }
+dotenvy = "0.15"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+hex = "0.4"
+lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1", "tokio1-rustls", "aws-lc-rs", "webpki-roots"] }
+rand = "0.8"
+rust_decimal = { version = "1", features = ["serde-with-str"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "mysql", "chrono", "rust_decimal", "migrate", "macros"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tower-http = { version = "0.6", features = ["cors"] }
+uuid = { version = "1", features = ["v4"] }
+ocrs = "0.13"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+rten = "0.26"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
