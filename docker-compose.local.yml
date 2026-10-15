@@ -1,0 +1,13 @@
+# Override untuk uji lokal saja. Membuka port ke host agar bisa diakses dari browser.
+# Dipakai bersama docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+# Coolify tidak memakai file ini.
+
+services:
+  api:
+    ports:
+      - "8000:8000"
+
+  web:
+    ports:
+      - "8080:80"

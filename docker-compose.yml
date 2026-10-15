@@ -1,9 +1,10 @@
-# Uji lokal seluruh stack, atau referensi untuk Coolify (Docker Compose resource).
-# Nilai rahasia diisi lewat file .env di folder yang sama, atau langsung di UI Coolify.
+# Compose untuk Coolify (Docker Compose resource). Tidak ada mapping port ke host:
+# Coolify yang meneruskan trafik domain ke service lewat proxy-nya sendiri.
+# Nilai rahasia diisi di UI Coolify (lihat .env.example untuk daftar variabelnya).
 #
-#   docker compose up --build
-#   web  -> http://localhost:8080
-#   api  -> http://localhost:8000 (hanya untuk pemeriksaan; di produksi cukup lewat proxy)
+# Uji lokal: pakai file override yang membuka port ke host.
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#   web -> http://localhost:8080    api -> http://localhost:8000
 
 name: financa
 
@@ -40,8 +41,8 @@ services:
       SMTP_DARI: ${SMTP_DARI:-noreply@financa.local}
     volumes:
       - bukti:/app/storage
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
 
   web:
     build:
@@ -53,8 +54,8 @@ services:
     restart: unless-stopped
     depends_on:
       - api
-    ports:
-      - "8080:80"
+    expose:
+      - "80"
 
 volumes:
   db:
