@@ -231,6 +231,29 @@ export interface BuktiServer {
   created_at: string;
 }
 
+/**
+ * Mengunduh berkas bukti sebagai Blob. Butuh header Authorization, jadi tidak bisa lewat `<img src>` biasa.
+ */
+export async function unduhBukti(buktiId: number): Promise<Blob> {
+  const sesi = ambilSesi();
+  if (!sesi) throw new ApiError(401, 'Belum masuk. Masuk terlebih dahulu untuk melanjutkan.');
+
+  let res: Response;
+  try {
+    res = await fetch(`${sesi.apiUrl.replace(/\/$/, '')}/api/v1/organisasi/${sesi.organisasiId}/bukti/${buktiId}`, {
+      headers: { Authorization: `Bearer ${sesi.token}` },
+    });
+  } catch {
+    throw new ApiError(0, 'Tidak ada koneksi ke server.');
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) simpanSesi(null);
+    throw new ApiError(res.status, `Server menjawab ${res.status}.`);
+  }
+  return res.blob();
+}
+
 /** Mengunggah bukti (JPG, PNG, atau PDF, maksimal 5 MB) ke transaksi yang sudah ada di server. */
 export async function unggahBukti(transaksiId: number, berkas: Blob, nama: string): Promise<BuktiServer> {
   const sesi = ambilSesi();
@@ -318,6 +341,7 @@ export const api = {
   daftarTransaksi: (dari: string, sampai: string) =>
     panggil<Transaksi[]>('GET', `/transaksi?dari=${dari}&sampai=${sampai}`),
   buatTransaksi: (b: TransaksiBaru) => panggil<Transaksi>('POST', '/transaksi', b),
+  daftarBukti: (transaksiId: number) => panggil<BuktiServer[]>('GET', `/transaksi/${transaksiId}/bukti`),
   buatTransfer: (b: TransferBaru) => panggil<Transfer>('POST', '/transfer', b),
   ringkasanBulanan: (tahun: number, bulan: number) =>
     panggil<RingkasanBulanan>('GET', `/laporan/bulanan?tahun=${tahun}&bulan=${bulan}`),

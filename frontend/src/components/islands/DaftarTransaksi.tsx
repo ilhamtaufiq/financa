@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { api, ambilSesi, type Rekening, type Transaksi } from '../../lib/api';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { api, ambilSesi, unduhBukti, type BuktiServer, type Rekening, type Transaksi } from '../../lib/api';
 import { db } from '../../lib/db';
 import { ambilReferensi, EVENT_SINKRON, gabungkanDaftar, labelTipe, type BarisDaftar } from '../../lib/sinkron';
 import { rentangBulan, rupiah } from '../../lib/format';
@@ -54,6 +54,150 @@ function cocokFilter(b: BarisDaftar, filter: Filter): boolean {
   return b.tipe === filter;
 }
 
+function bacaSebagaiDataUrl(berkas: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const pembaca = new FileReader();
+    pembaca.onload = () => resolve(pembaca.result as string);
+    pembaca.onerror = () => reject(pembaca.error);
+    pembaca.readAsDataURL(berkas);
+  });
+}
+
+interface BerkasTampil {
+  bukti: BuktiServer;
+  /** Data URL untuk gambar. CSP app hanya mengizinkan img-src 'self' dan data:. */
+  dataUrl?: string;
+  /** Object URL untuk berkas selain gambar (PDF), dibuka di tab baru. */
+  objectUrl?: string;
+}
+
+/** Detail satu transaksi beserta bukti (foto struk, PDF) yang terlampir di server. */
+function DetailTransaksi({ baris, namaRekening, onTutup }: { baris: BarisDaftar; namaRekening: string; onTutup: () => void }) {
+  const idJudul = useId();
+  const [berkas, setBerkas] = useState<BerkasTampil[]>([]);
+  const [memuatBukti, setMemuatBukti] = useState(false);
+  const [galat, setGalat] = useState<string | null>(null);
+  const masuk = baris.tipe === 'pemasukan';
+  const keluar = baris.tipe === 'pengeluaran';
+
+  useEffect(() => {
+    if (baris.server_id === null) return;
+    const idTransaksi = baris.server_id;
+    let batal = false;
+    const dibuat: string[] = [];
+
+    (async () => {
+      setMemuatBukti(true);
+      try {
+        const daftar = await api.daftarBukti(idTransaksi);
+        for (const bukti of daftar) {
+          if (batal) return;
+          const blob = await unduhBukti(bukti.id);
+          if (batal) return;
+          const tampil: BerkasTampil = { bukti };
+          if (bukti.mime.startsWith('image/')) {
+            tampil.dataUrl = await bacaSebagaiDataUrl(blob);
+          } else {
+            tampil.objectUrl = URL.createObjectURL(blob);
+            dibuat.push(tampil.objectUrl);
+          }
+          setBerkas((lama) => [...lama, tampil]);
+        }
+      } catch (err) {
+        if (!batal) setGalat(err instanceof Error ? err.message : 'Bukti belum bisa dimuat.');
+      } finally {
+        if (!batal) setMemuatBukti(false);
+      }
+    })();
+
+    return () => {
+      batal = true;
+      dibuat.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [baris.server_id]);
+
+  useEffect(() => {
+    function tekan(e: KeyboardEvent) {
+      if (e.key === 'Escape') onTutup();
+    }
+    document.addEventListener('keydown', tekan);
+    return () => document.removeEventListener('keydown', tekan);
+  }, [onTutup]);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-end justify-items-center p-0 sm:place-items-center sm:p-5">
+      <div aria-hidden="true" className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onTutup} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={idJudul}
+        className="relative max-h-[90vh] w-full max-w-md space-y-5 overflow-y-auto rounded-t-[32px] bg-permukaan p-6 shadow-[0_24px_60px_-12px_rgba(60,40,120,0.35)] sm:rounded-[32px]"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <h2 id={idJudul} className="text-xl font-bold leading-tight">{labelTipe(baris.tipe)}</h2>
+            <p className="text-sm text-redup">{labelTanggal(baris.tanggal)}</p>
+          </div>
+          <button type="button" onClick={onTutup} className="tombol-garis min-h-11 shrink-0 px-4 text-sm">
+            Tutup
+          </button>
+        </div>
+
+        <p className={`text-3xl font-bold tabular-nums ${masuk ? 'text-[#1f6b3a]' : ''} ${!masuk && !keluar ? 'text-redup' : ''}`}>
+          {masuk ? '+' : keluar ? '−' : ''}
+          {rupiah(baris.jumlah)}
+        </p>
+
+        <dl className="space-y-3 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-redup">Rekening</dt>
+            <dd className="text-right font-semibold">{namaRekening || '—'}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-redup">Catatan</dt>
+            <dd className="text-right font-semibold break-words">{baris.catatan || '—'}</dd>
+          </div>
+        </dl>
+
+        {baris.status !== 'server' && (
+          <p className="rounded-[20px] bg-inset px-4 py-3 text-sm text-redup">
+            Transaksi ini belum terkirim. Bukti bisa dilihat setelah transaksi tersimpan di server.
+          </p>
+        )}
+
+        {baris.server_id !== null && (
+          <section className="space-y-3" aria-labelledby={`${idJudul}-bukti`}>
+            <h3 id={`${idJudul}-bukti`} className="text-sm font-bold text-redup">Bukti</h3>
+            {memuatBukti && berkas.length === 0 && <p className="text-sm text-redup">Memuat bukti…</p>}
+            {!memuatBukti && berkas.length === 0 && !galat && <p className="text-sm text-redup">Tidak ada bukti terlampir.</p>}
+            {galat && <p role="status" className="text-sm text-bahaya">{galat}</p>}
+            {berkas.map(({ bukti, dataUrl, objectUrl }) =>
+              dataUrl ? (
+                <img
+                  key={bukti.id}
+                  src={dataUrl}
+                  alt={`Bukti: ${bukti.nama_asli}`}
+                  className="max-h-96 w-full rounded-[20px] bg-inset object-contain"
+                />
+              ) : (
+                <a
+                  key={bukti.id}
+                  href={objectUrl}
+                  target="_blank"
+                  rel="noopener"
+                  className="tautan-ungu flex min-h-11 items-center rounded-[20px] bg-inset px-4 text-sm"
+                >
+                  {bukti.nama_asli}
+                </a>
+              ),
+            )}
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DaftarTransaksi() {
   const [bulan, setBulan] = useState(bulanIni());
   const [baris, setBaris] = useState<BarisDaftar[]>([]);
@@ -61,6 +205,7 @@ export default function DaftarTransaksi() {
   const [filter, setFilter] = useState<Filter>('semua');
   const [pesan, setPesan] = useState<string | null>(null);
   const [memuat, setMemuat] = useState(false);
+  const [dipilih, setDipilih] = useState<BarisDaftar | null>(null);
 
   async function muat() {
     setMemuat(true);
@@ -184,7 +329,13 @@ export default function DaftarTransaksi() {
                 const masuk = b.tipe === 'pemasukan';
                 const keluar = b.tipe === 'pengeluaran';
                 return (
-                  <li key={b.kunci} className="flex min-h-16 items-center gap-3 rounded-3xl bg-permukaan p-3.5 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.04)]">
+                  <li key={b.kunci}>
+                  <button
+                    type="button"
+                    onClick={() => setDipilih(b)}
+                    aria-haspopup="dialog"
+                    className="flex min-h-16 w-full items-center gap-3 rounded-3xl bg-permukaan p-3.5 text-left shadow-[0_4px_20px_-2px_rgba(0,0,0,0.04)]"
+                  >
                     <span
                       aria-hidden="true"
                       className={`grid size-12 shrink-0 place-items-center rounded-2xl ${
@@ -211,6 +362,7 @@ export default function DaftarTransaksi() {
                       {masuk ? '+' : keluar ? '−' : ''}
                       {rupiah(b.jumlah)}
                     </p>
+                  </button>
                   </li>
                 );
               })}
@@ -218,6 +370,14 @@ export default function DaftarTransaksi() {
           </div>
         ))}
       </div>
+
+      {dipilih && (
+        <DetailTransaksi
+          baris={dipilih}
+          namaRekening={namaRekening(dipilih.rekening_id)}
+          onTutup={() => setDipilih(null)}
+        />
+      )}
     </section>
   );
 }

@@ -19,6 +19,8 @@ export type StatusBaris = 'server' | 'menunggu' | 'gagal';
 
 export interface BarisDaftar {
   kunci: string;
+  /** ID transaksi di server. Null untuk entri yang belum terkirim. */
+  server_id: number | null;
   tanggal: string;
   tipe: string;
   rekening_id: number | null;
@@ -217,6 +219,7 @@ async function prosesAntrean(): Promise<HasilKirim> {
 export function gabungkanDaftar(server: Transaksi[], lokal: EntriLokal[]): BarisDaftar[] {
   const dariServer: BarisDaftar[] = server.map((t) => ({
     kunci: `srv-${t.id}`,
+    server_id: t.id,
     tanggal: t.tanggal,
     tipe: t.tipe,
     rekening_id: t.rekening_id,
@@ -230,6 +233,7 @@ export function gabungkanDaftar(server: Transaksi[], lokal: EntriLokal[]): Baris
     .filter((e) => e.status !== 'tersinkron')
     .map((e) => ({
       kunci: `lok-${e.uuid}`,
+      server_id: null,
       tanggal: e.tanggal,
       tipe: e.jenis === 'transfer' ? 'transfer_keluar' : (e.tipe ?? 'pengeluaran'),
       rekening_id: e.jenis === 'transfer' ? (e.rekening_asal_id ?? null) : (e.rekening_id ?? null),
