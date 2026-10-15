@@ -123,6 +123,19 @@ export interface RingkasanBulanan {
   jumlah_transaksi: number;
 }
 
+/** Draf transaksi dari email yang menunggu ditinjau. Belum tercatat sebagai transaksi. */
+export interface Draf {
+  id: number;
+  sumber_pesan_id: string;
+  pengirim: string | null;
+  keterangan: string;
+  jumlah: Desimal | null;
+  tipe: 'pemasukan' | 'pengeluaran' | null;
+  tanggal: string | null;
+  status: 'menunggu' | 'disetujui' | 'dibuang';
+  transaksi_id: number | null;
+}
+
 export interface TransaksiBaru {
   rekening_id: number;
   kategori_id: number | null;
@@ -343,6 +356,12 @@ export const api = {
   buatTransaksi: (b: TransaksiBaru) => panggil<Transaksi>('POST', '/transaksi', b),
   daftarBukti: (transaksiId: number) => panggil<BuktiServer[]>('GET', `/transaksi/${transaksiId}/bukti`),
   buatTransfer: (b: TransferBaru) => panggil<Transfer>('POST', '/transfer', b),
+  draf: () => panggil<Draf[]>('GET', '/draf'),
+  setujuiDraf: (id: number, rekening_id: number, kategori_id: number | null) =>
+    panggil<Transaksi>('POST', `/draf/${id}/setujui`, { rekening_id, kategori_id }),
+  buangDraf: (id: number) => panggil<void>('POST', `/draf/${id}/buang`),
+  gmailMulai: () => panggil<{ url: string }>('GET', '/gmail/mulai'),
+  gmailSinkron: () => panggil<{ diperiksa: number; draf_baru: number }>('POST', '/gmail/sinkron'),
   ringkasanBulanan: (tahun: number, bulan: number) =>
     panggil<RingkasanBulanan>('GET', `/laporan/bulanan?tahun=${tahun}&bulan=${bulan}`),
   arusKas: (dari: string, sampai: string) =>
