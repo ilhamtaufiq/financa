@@ -843,6 +843,11 @@ async fn ekspor_laba_rugi_csv(
     Ok(unduhan_csv(isi, nama))
 }
 
+/// Pemeriksaan hidup untuk healthcheck container. Tidak menyentuh database.
+async fn kesehatan() -> StatusCode {
+    StatusCode::OK
+}
+
 /// Router API v1 dengan pengirim email nonaktif. Untuk produksi gunakan `router_dengan`.
 pub fn router(pool: MySqlPool) -> Router {
     router_dengan(pool, Arc::new(PengirimNonaktif), "http://localhost:4322/reset".to_string())
@@ -851,6 +856,7 @@ pub fn router(pool: MySqlPool) -> Router {
 /// Router API v1. `{org}` adalah id organisasi.
 pub fn router_dengan(pool: MySqlPool, pengirim: Arc<dyn Pengirim>, tautan_reset: String) -> Router {
     Router::new()
+        .route("/api/v1/kesehatan", get(kesehatan))
         .route("/api/v1/auth/daftar", post(daftar))
         .route("/api/v1/auth/masuk", post(masuk))
         .route("/api/v1/auth/keluar", post(keluar))
