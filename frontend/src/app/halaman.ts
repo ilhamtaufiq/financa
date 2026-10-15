@@ -15,6 +15,7 @@ export const HALAMAN: Halaman[] = [
   { ruta: 'transaksi/baru', judul: 'Catat transaksi' },
   { ruta: 'laporan', judul: 'Laporan' },
   { ruta: 'prakiraan', judul: 'Prakiraan' },
+  { ruta: 'draf', judul: 'Tinjau email' },
   { ruta: 'pengaturan', judul: 'Pengaturan' },
 ];
 

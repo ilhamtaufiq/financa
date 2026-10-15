@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use axum::extract::{DefaultBodyLimit, FromRequestParts, Multipart, Path, Query, State};
 use axum::http::{header, request::Parts, HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
@@ -15,6 +15,7 @@ use crate::auth::{self, PembatasMasuk};
 use crate::bukti::{self, BATAS_BUKTI};
 use crate::csv::{self, BOM_UTF8};
 use crate::db::{self, OrganisasiSaya};
+use crate::draf::Draf;
 use crate::error::Error;
 use crate::laporan::{ArusKasRekening, LabaRugi, RingkasanBulanan};
 use crate::model::{
@@ -35,6 +36,8 @@ pub struct AppState {
     pub pembaca: Option<Arc<crate::ocr::Pembaca>>,
     /// Folder penyimpanan berkas bukti transaksi (BUKTI_DIR).
     pub folder_bukti: std::path::PathBuf,
+    /// `None` jika variabel GMAIL_* belum lengkap. Endpoint Gmail lalu menolak dengan pesan jelas.
+    pub gmail: Option<Arc<crate::gmail::Konfig>>,
 }
 
 #[derive(Debug)]
@@ -552,6 +555,95 @@ async fn buat_transaksi(
     Ok((status, Json(transaksi)))
 }
 
+// ---- Draf transaksi dari email ----
+
+#[derive(Deserialize)]
+struct SetujuiDraf {
+    rekening_id: u64,
+    kategori_id: Option<u64>,
+}
+
+async fn daftar_draf(State(st): State<AppState>, a: Anggota) -> Result<Json<Vec<Draf>>, ApiError> {
+    Ok(Json(Tenant::new(st.pool, a.organisasi_id).daftar_draf_menunggu().await?))
+}
+
+/// Menyetujui draf menjadi transaksi. Rekening wajib dipilih pengguna; kategori boleh kosong.
+async fn setujui_draf(
+    State(st): State<AppState>,
+    a: Anggota,
+    Path((_, id)): Path<(u64, u64)>,
+    Json(body): Json<SetujuiDraf>,
+) -> Result<(StatusCode, Json<Transaksi>), ApiError> {
+    wajib_kelola(&a)?;
+    let transaksi = Tenant::new(st.pool, a.organisasi_id)
+        .setujui_draf(id, body.rekening_id, body.kategori_id, a.pengguna_id)
+        .await?;
+    Ok((StatusCode::CREATED, Json(transaksi)))
+}
+
+async fn buang_draf(State(st): State<AppState>, a: Anggota, Path((_, id)): Path<(u64, u64)>) -> Result<StatusCode, ApiError> {
+    wajib_kelola(&a)?;
+    Tenant::new(st.pool, a.organisasi_id).buang_draf(id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---- Tangkapan transaksi dari Gmail ----
+
+fn konfig_gmail(st: &AppState) -> Result<&crate::gmail::Konfig, ApiError> {
+    st.gmail
+        .as_deref()
+        .ok_or(ApiError::Domain(Error::Validasi("Integrasi Gmail belum diatur di server.".to_string())))
+}
+
+#[derive(Serialize)]
+struct UrlPersetujuan {
+    url: String,
+}
+
+async fn gmail_mulai(State(st): State<AppState>, a: Anggota) -> Result<Json<UrlPersetujuan>, ApiError> {
+    let konfig = konfig_gmail(&st)?;
+    Ok(Json(UrlPersetujuan {
+        url: konfig.url_persetujuan(a.organisasi_id, a.pengguna_id),
+    }))
+}
+
+async fn gmail_sinkron(State(st): State<AppState>, a: Anggota) -> Result<Json<crate::gmail::SinkronHasil>, ApiError> {
+    let konfig = konfig_gmail(&st)?;
+    let tenant = Tenant::new(st.pool.clone(), a.organisasi_id);
+    Ok(Json(konfig.sinkron(&tenant, a.pengguna_id).await?))
+}
+
+#[derive(Deserialize)]
+struct CallbackGmail {
+    code: Option<String>,
+    state: Option<String>,
+}
+
+/// Google mengarahkan browser ke sini. Identitas pengguna diambil dari `state` yang ditandatangani,
+/// lalu keanggotaannya dicek ulang sebelum token disimpan. Hasilnya selalu redirect ke frontend.
+async fn gmail_callback(State(st): State<AppState>, Query(q): Query<CallbackGmail>) -> Response {
+    let Some(konfig) = st.gmail.as_deref() else {
+        return ApiError::Domain(Error::Validasi("Integrasi Gmail belum diatur di server.".to_string())).into_response();
+    };
+
+    let mut berhasil = false;
+    if let (Some(kode), Some((organisasi_id, pengguna_id))) =
+        (q.code.as_deref(), q.state.as_deref().and_then(|s| konfig.baca_state(s)))
+    {
+        let anggota = matches!(db::peran_anggota(&st.pool, organisasi_id, pengguna_id).await, Ok(Some(_)));
+        if anggota {
+            let tenant = Tenant::new(st.pool.clone(), organisasi_id);
+            match konfig.hubungkan(&tenant, pengguna_id, kode).await {
+                Ok(_) => berhasil = true,
+                Err(e) => eprintln!("gmail callback: {e}"),
+            }
+        }
+    }
+
+    let status = if berhasil { "terhubung" } else { "gagal" };
+    Redirect::to(&format!("{}?gmail={status}", konfig.frontend_url)).into_response()
+}
+
 // ---- Bukti transaksi (opsional) ----
 
 /// Melampirkan bukti (JPG, PNG, atau PDF, maksimal 5 MB) ke transaksi. Berkas dicek dari isinya.
@@ -895,6 +987,12 @@ pub fn router_dengan(pool: MySqlPool, pengirim: Arc<dyn Pengirim>, tautan_reset:
         )
         .route("/api/v1/organisasi/{org}/bukti/{id}", get(ambil_berkas_bukti))
         .route("/api/v1/organisasi/{org}/transfer", post(buat_transfer))
+        .route("/api/v1/organisasi/{org}/draf", get(daftar_draf))
+        .route("/api/v1/organisasi/{org}/draf/{id}/setujui", post(setujui_draf))
+        .route("/api/v1/organisasi/{org}/draf/{id}/buang", post(buang_draf))
+        .route("/api/v1/organisasi/{org}/gmail/mulai", get(gmail_mulai))
+        .route("/api/v1/organisasi/{org}/gmail/sinkron", post(gmail_sinkron))
+        .route("/api/v1/gmail/callback", get(gmail_callback))
         .route("/api/v1/organisasi/{org}/laporan/bulanan", get(laporan_bulanan))
         .route("/api/v1/organisasi/{org}/laporan/arus-kas", get(laporan_arus_kas))
         .route("/api/v1/organisasi/{org}/laporan/laba-rugi", get(laporan_laba_rugi))
@@ -907,5 +1005,6 @@ pub fn router_dengan(pool: MySqlPool, pengirim: Arc<dyn Pengirim>, tautan_reset:
             tautan_reset,
             pembaca: crate::ocr::Pembaca::dari_env().map(Arc::new),
             folder_bukti: bukti::folder_dari_env(),
+            gmail: crate::gmail::Konfig::dari_env().map(Arc::new),
         })
 }

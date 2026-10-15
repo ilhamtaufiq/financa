@@ -51,7 +51,7 @@ fn cari_jumlah(baris: &[&str]) -> Option<String> {
 
 /// Format Indonesia: titik sebagai pemisah ribuan, koma sebagai desimal.
 /// Koma hanya dianggap desimal jika diikuti tepat dua digit (sen). "Rp 12.500" -> 12500, "12.500,50" -> 12500.50.
-fn parse_rupiah(token: &str) -> Option<String> {
+pub(crate) fn parse_rupiah(token: &str) -> Option<String> {
     let bersih: String = token
         .to_uppercase()
         .trim_start_matches("RP")
@@ -90,7 +90,7 @@ fn cari_tanggal(baris: &[&str]) -> Option<String> {
     baris.iter().flat_map(|b| b.split_whitespace()).find_map(parse_tanggal)
 }
 
-fn parse_tanggal(token: &str) -> Option<String> {
+pub(crate) fn parse_tanggal(token: &str) -> Option<String> {
     let bagian: Vec<&str> = token.split(['/', '-', '.']).collect();
     if bagian.len() != 3 || bagian.iter().any(|b| b.is_empty() || !b.chars().all(|c| c.is_ascii_digit())) {
         return None;
