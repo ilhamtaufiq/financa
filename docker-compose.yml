@@ -39,6 +39,12 @@ services:
       FRONTEND_RESET_URL: ${FRONTEND_RESET_URL:-http://localhost:8080/reset}
       SMTP_URL: ${SMTP_URL:-}
       SMTP_DARI: ${SMTP_DARI:-noreply@financa.local}
+      # Integrasi Gmail. Kosongkan semua untuk mematikan fitur ini.
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REDIRECT_URI: ${GMAIL_REDIRECT_URI:-}
+      GMAIL_ENC_KEY: ${GMAIL_ENC_KEY:-}
+      GMAIL_FRONTEND_URL: ${GMAIL_FRONTEND_URL:-}
     volumes:
       - bukti:/app/storage
     expose:
@@ -60,6 +66,45 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  analitik:
+    build:
+      context: ./analitik
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Idealnya user MySQL khusus dengan hak SELECT saja. Lihat analitik/README.md.
+      ANALITIK_DATABASE_URL: mysql://financa:${MYSQL_PASSWORD}@db:3306/financa
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      ANALITIK_CORS_ORIGIN: ${DASBOR_ORIGIN:-http://localhost:5174}
+    expose:
+      - "8100"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8100/api/v1/analitik/kesehatan"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  dasbor:
+    build:
+      context: ./dasbor
+      args:
+        # Alamat yang diakses browser admin (domain publik), bukan alamat internal container.
+        VITE_BACKEND_URL: ${DASBOR_BACKEND_URL:-http://localhost:8000}
+        VITE_ANALITIK_URL: ${DASBOR_ANALITIK_URL:-http://localhost:8100}
+    restart: unless-stopped
+    depends_on:
+      - analitik
     expose:
       - "80"
     healthcheck:
