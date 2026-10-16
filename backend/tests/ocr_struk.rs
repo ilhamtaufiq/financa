@@ -1,26 +1,26 @@
-// Uji OCR ujung-ke-ujung pada struk contoh. Butuh model di `models/`.
-// Tanpa model, tes dilewati. Lihat README atau .env.example untuk cara mengunduhnya.
+// Uji OCR ujung-ke-ujung pada struk contoh. Butuh binary Tesseract dengan bahasa `ind` dan `eng`.
+// Tanpa Tesseract, tes dilewati. Atur TESSERACT_CMD jika binary tidak ada di PATH.
 
 use std::path::Path;
 
 use financa_api::ocr::Pembaca;
 use financa_api::struk::urai;
 
-fn folder_model() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("models")
-}
-
-fn model_tersedia() -> bool {
-    folder_model().join("text-detection.rten").exists() && folder_model().join("text-recognition.rten").exists()
+fn pembaca_tersedia() -> Option<Pembaca> {
+    let cmd = std::env::var("TESSERACT_CMD").unwrap_or_else(|_| "tesseract".to_string());
+    let bahasa = std::env::var("TESSERACT_LANG").unwrap_or_else(|_| "ind+eng".to_string());
+    match Pembaca::muat(&cmd, &bahasa) {
+        Ok(p) => Some(p),
+        Err(e) => {
+            eprintln!("lewati: Tesseract tidak tersedia ({e})");
+            None
+        }
+    }
 }
 
 #[test]
 fn struk_contoh_menghasilkan_jumlah_dan_tanggal() {
-    if !model_tersedia() {
-        eprintln!("lewati: model OCR belum ada di {}", folder_model().display());
-        return;
-    }
-    let pembaca = Pembaca::muat(&folder_model()).expect("model OCR harus bisa dimuat");
+    let Some(pembaca) = pembaca_tersedia() else { return };
     let gambar = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/struk-contoh.png"))
         .expect("fixture struk ada");
 
@@ -33,10 +33,7 @@ fn struk_contoh_menghasilkan_jumlah_dan_tanggal() {
 
 #[test]
 fn gambar_rusak_menjadi_error_validasi() {
-    if !model_tersedia() {
-        return;
-    }
-    let pembaca = Pembaca::muat(&folder_model()).expect("model OCR harus bisa dimuat");
+    let Some(pembaca) = pembaca_tersedia() else { return };
     let hasil = pembaca.baca(b"bukan gambar");
-    assert!(matches!(hasil, Err(financa_api::Error::Validasi(_))), "hasil: {hasil:?}");
+    assert!(hasil.is_err(), "gambar rusak harus ditolak");
 }

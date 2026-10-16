@@ -14,27 +14,22 @@ COPY src ./src
 COPY migrations ./migrations
 RUN cargo build --release --locked --bin financa-api
 
-# Model OCR (ocrs) diunduh saat build supaya image bisa dibuat ulang tanpa berkas lokal.
-# Sumbernya sama dengan yang dipakai backend/models di mesin pengembangan.
-RUN mkdir -p /src/models \
- && curl -fsSL -o /src/models/text-detection.rten https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten \
- && curl -fsSL -o /src/models/text-recognition.rten https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten
-
 # ---- runtime ----
+# Tesseract dipasang sebagai binary. Bahasa Indonesia dan Inggris dipakai untuk membaca struk.
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl \
+ && apt-get install -y --no-install-recommends ca-certificates curl tesseract-ocr tesseract-ocr-ind tesseract-ocr-eng \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --create-home financa
 
 WORKDIR /app
 COPY --from=build /src/target/release/financa-api /app/financa-api
-COPY --from=build /src/models /app/models
 RUN mkdir -p /app/storage/bukti && chown -R financa:financa /app/storage
 
 # Default di kode adalah 127.0.0.1 (hanya localhost). Di dalam container harus 0.0.0.0 agar proxy Coolify bisa mencapainya.
 ENV BIND=0.0.0.0:8000 \
-    OCR_MODEL_DIR=/app/models \
+    TESSERACT_CMD=tesseract \
+    TESSERACT_LANG=ind+eng \
     BUKTI_DIR=/app/storage/bukti
 
 USER financa
