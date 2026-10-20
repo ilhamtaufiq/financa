@@ -136,6 +136,14 @@ export interface Draf {
   transaksi_id: number | null;
 }
 
+/** Undangan yang belum diterima. Token tidak pernah dikirim balik ke browser. */
+export interface UndanganMenunggu {
+  id: number;
+  email: string;
+  peran: 'admin' | 'anggota';
+  expires_at: string;
+}
+
 export interface TransaksiBaru {
   rekening_id: number;
   kategori_id: number | null;
@@ -357,6 +365,14 @@ export const api = {
   daftarBukti: (transaksiId: number) => panggil<BuktiServer[]>('GET', `/transaksi/${transaksiId}/bukti`),
   buatTransfer: (b: TransferBaru) => panggil<Transfer>('POST', '/transfer', b),
   draf: () => panggil<Draf[]>('GET', '/draf'),
+  undanganMenunggu: () => panggil<UndanganMenunggu[]>('GET', '/undangan'),
+  buatUndangan: (b: { email: string; peran: 'admin' | 'anggota' }) => panggil<void>('POST', '/undangan', b),
+  /** Tidak terikat organisasi: undangan membawa organisasi sendiri. */
+  terimaUndangan: async (token: string) => {
+    const sesi = ambilSesi();
+    if (!sesi) throw new ApiError(401, 'Belum masuk. Masuk terlebih dahulu untuk melanjutkan.');
+    return kirimKe<{ organisasi_id: number }>(sesi.apiUrl, 'POST', '/api/v1/undangan/terima', sesi.token, { token });
+  },
   setujuiDraf: (id: number, rekening_id: number, kategori_id: number | null) =>
     panggil<Transaksi>('POST', `/draf/${id}/setujui`, { rekening_id, kategori_id }),
   buangDraf: (id: number) => panggil<void>('POST', `/draf/${id}/buang`),
