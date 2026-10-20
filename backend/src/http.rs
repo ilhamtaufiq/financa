@@ -23,6 +23,7 @@ use crate::model::{
     Rekening, TipeTransaksi, Transaksi, Transfer,
 };
 use crate::pengirim::{Pengirim, PengirimNonaktif};
+use crate::undangan::{self, Terima, UndanganMenunggu};
 use crate::Tenant;
 
 #[derive(Clone)]
@@ -32,6 +33,8 @@ pub struct AppState {
     pub pengirim: Arc<dyn Pengirim>,
     /// URL halaman reset di frontend. Token ditambahkan sebagai `?token=`.
     pub tautan_reset: String,
+    /// Halaman frontend untuk menerima undangan. Token ditambahkan sebagai ?token=...
+    pub tautan_undangan: String,
     /// `None` jika model OCR belum ada. Endpoint baca struk menjawab 503, API lain tetap jalan.
     pub pembaca: Option<Arc<crate::ocr::Pembaca>>,
     /// Folder penyimpanan berkas bukti transaksi (BUKTI_DIR).
@@ -644,6 +647,90 @@ async fn gmail_callback(State(st): State<AppState>, Query(q): Query<CallbackGmai
     Redirect::to(&format!("{}?gmail={status}", konfig.frontend_url)).into_response()
 }
 
+// ---- Undangan anggota ----
+
+#[derive(Deserialize)]
+struct UndanganBaru {
+    email: String,
+    peran: String,
+}
+
+#[derive(Deserialize)]
+struct TerimaUndanganBaru {
+    token: String,
+}
+
+/// Owner dan admin mengundang. Undangan berlaku 7 hari. Hanya peran admin atau anggota yang bisa diundang.
+async fn buat_undangan(
+    State(st): State<AppState>,
+    a: Anggota,
+    Json(body): Json<UndanganBaru>,
+) -> Result<StatusCode, ApiError> {
+    wajib_kelola(&a)?;
+    let email = body.email.trim().to_lowercase();
+    if !email.contains('@') || email.len() > 190 {
+        return Err(Error::Validasi("Email tidak valid.".to_string()).into());
+    }
+    let peran = match body.peran.as_str() {
+        "admin" => "admin",
+        "anggota" => "anggota",
+        _ => return Err(Error::Validasi("Peran undangan harus admin atau anggota.".to_string()).into()),
+    };
+    if let Some(akun) = db::cari_pengguna_by_email(&st.pool, &email).await? {
+        if db::peran_anggota(&st.pool, a.organisasi_id, akun.id).await?.is_some() {
+            return Err(Error::Validasi("Email ini sudah menjadi anggota organisasi.".to_string()).into());
+        }
+    }
+
+    let token = auth::buat_token();
+    undangan::buat(
+        &st.pool,
+        a.organisasi_id,
+        &email,
+        peran,
+        &token.token_hash,
+        a.pengguna_id,
+        Utc::now() + Duration::days(7),
+    )
+    .await?;
+
+    let isi = format!(
+        "Anda diundang bergabung ke organisasi di Financa sebagai {peran}.\n\nMasuk dengan email {email}, lalu buka tautan berikut (berlaku 7 hari):\n{}?token={}\n\nJika Anda tidak mengenal pengundang, abaikan email ini.",
+        st.tautan_undangan, token.token
+    );
+    // Galat pengiriman hanya dicatat; isi email (berisi token) tidak pernah dicetak.
+    if let Err(e) = st.pengirim.kirim(&email, "Undangan bergabung ke Financa", &isi).await {
+        eprintln!("gagal mengirim undangan: {e}");
+    }
+    Ok(StatusCode::CREATED)
+}
+
+async fn daftar_undangan(State(st): State<AppState>, a: Anggota) -> Result<Json<Vec<UndanganMenunggu>>, ApiError> {
+    wajib_kelola(&a)?;
+    Ok(Json(undangan::daftar_menunggu(&st.pool, a.organisasi_id).await?))
+}
+
+/// Pengguna yang sudah masuk menerima undangan. Email akun harus sama dengan email yang diundang.
+async fn terima_undangan(
+    State(st): State<AppState>,
+    Pengguna(pengguna_id): Pengguna,
+    Json(body): Json<TerimaUndanganBaru>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let akun = db::cari_pengguna_by_id(&st.pool, pengguna_id)
+        .await?
+        .ok_or(ApiError::SesiTidakValid)?;
+    let hasil = undangan::terima(&st.pool, &auth::hash_token(body.token.trim()), pengguna_id, &akun.email).await?;
+    match hasil {
+        Terima::Berhasil { organisasi_id } => Ok(Json(serde_json::json!({ "organisasi_id": organisasi_id }))),
+        Terima::Tidak => Err(Error::Validasi("Undangan tidak valid, sudah dipakai, atau kedaluwarsa.".to_string()).into()),
+        Terima::EmailBeda => Err(Error::Validasi(
+            "Undangan ini untuk email lain. Masuk dengan email yang diundang.".to_string(),
+        )
+        .into()),
+        Terima::SudahAnggota => Err(Error::Validasi("Anda sudah menjadi anggota organisasi ini.".to_string()).into()),
+    }
+}
+
 // ---- Bukti transaksi (opsional) ----
 
 /// Melampirkan bukti (JPG, PNG, atau PDF, maksimal 5 MB) ke transaksi. Berkas dicek dari isinya.
@@ -998,11 +1085,18 @@ pub fn router_dengan(pool: MySqlPool, pengirim: Arc<dyn Pengirim>, tautan_reset:
         .route("/api/v1/organisasi/{org}/laporan/laba-rugi", get(laporan_laba_rugi))
         .route("/api/v1/organisasi/{org}/ekspor/transaksi.csv", get(ekspor_transaksi_csv))
         .route("/api/v1/organisasi/{org}/ekspor/laba-rugi.csv", get(ekspor_laba_rugi_csv))
+        .route(
+            "/api/v1/organisasi/{org}/undangan",
+            get(daftar_undangan).post(buat_undangan),
+        )
+        .route("/api/v1/undangan/terima", post(terima_undangan))
         .with_state(AppState {
             pool,
             pembatas: Arc::new(PembatasMasuk::default()),
             pengirim,
             tautan_reset,
+            tautan_undangan: std::env::var("FRONTEND_UNDANGAN_URL")
+                .unwrap_or_else(|_| "http://localhost:4322/app/undang".to_string()),
             pembaca: crate::ocr::Pembaca::dari_env().map(Arc::new),
             folder_bukti: bukti::folder_dari_env(),
             gmail: crate::gmail::Konfig::dari_env().map(Arc::new),

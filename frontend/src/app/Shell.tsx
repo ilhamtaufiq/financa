@@ -11,6 +11,7 @@ const MENU = [
   { to: '/', label: 'Beranda', ikon: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
   { to: '/transaksi', label: 'Transaksi', ikon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
   { to: '/laporan', label: 'Laporan', ikon: 'M3 21h18M7 17v-4M12 17V7M17 17v-7' },
+  { to: '/anggota', label: 'Anggota', ikon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
   { to: '/pengaturan', label: 'Pengaturan', ikon: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4' },
 ];
 const AKSI_UTAMA = { to: '/transaksi/baru', label: 'Catat transaksi', ikon: 'M12 5v14M5 12h14' };

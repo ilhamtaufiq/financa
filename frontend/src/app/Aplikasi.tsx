@@ -17,6 +17,8 @@ const HALAMAN: Record<string, ComponentType> = {
   '/pengaturan': lazy(() => import('../components/islands/Pengaturan')),
   '/prakiraan': lazy(() => import('../components/islands/Prakiraan')),
   '/draf': lazy(() => import('../components/islands/TinjauDraf')),
+  '/anggota': lazy(() => import('../components/islands/Anggota')),
+  '/undang': lazy(() => import('../components/islands/TerimaUndangan')),
 };
 
 export default function Aplikasi() {

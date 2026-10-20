@@ -13,6 +13,7 @@ pub mod ocr;
 pub mod pengirim;
 pub mod repo;
 pub mod struk;
+pub mod undangan;
 
 pub use error::{Error, Result};
 pub use repo::Tenant;
