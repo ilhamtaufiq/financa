@@ -65,14 +65,28 @@ const { judul, polos = false } = Astro.props;
       } else {
         // Versi baru mengambil alih setelah deploy: muat ulang sekali supaya halaman yang terbuka ikut diperbarui.
         // Hanya jika sebelumnya sudah ada service worker, supaya kunjungan pertama tidak reload.
+        // Penanda di sessionStorage mencegah reload berulang. Tanpa ini, reload yang memicu pembaruan SW
+        // memicu controllerchange lagi, lalu reload lagi, dan halaman macet dalam loop.
+        const KUNCI_RELOAD = 'sw-reload-baru';
         const sudahAda = Boolean(navigator.serviceWorker.controller);
-        let sudahMuatUlang = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (!sudahAda || sudahMuatUlang) return;
-          sudahMuatUlang = true;
+          if (!sudahAda) return;
+          try {
+            if (sessionStorage.getItem(KUNCI_RELOAD)) return;
+            sessionStorage.setItem(KUNCI_RELOAD, '1');
+          } catch {
+            // sessionStorage tidak tersedia: lewati reload otomatis supaya tidak ada loop.
+            return;
+          }
           window.location.reload();
         });
         window.addEventListener('load', () => {
+          // Penanda dihapus setelah halaman stabil, supaya deploy berikutnya tetap memuat ulang sekali.
+          setTimeout(() => {
+            try {
+              sessionStorage.removeItem(KUNCI_RELOAD);
+            } catch {}
+          }, 5000);
           navigator.serviceWorker.register('/sw.js').catch(() => {});
         });
       }
