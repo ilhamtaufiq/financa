@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::error::{Error, Result};
 use crate::model::{
     Bukti, JenisRekening, Kategori, NewKategori, NewRekening, NewTransaksi, NewTransfer, Rekening,
-    TipeKategori, TipeTransaksi, Transaksi, Transfer,
+    TipeKategori, TipeTransaksi, Transaksi, Transfer, UbahTransaksi,
 };
 
 /// Repository yang terikat pada satu organisasi. Setiap query memakai
@@ -355,6 +355,145 @@ impl Tenant {
         ))
     }
 
+    /// Mengubah pemasukan atau pengeluaran. Transfer ditolak karena dua barisnya harus berpasangan.
+    /// Perubahan dicatat di audit dengan nilai sebelum dan sesudah.
+    pub async fn ubah_transaksi_oleh(&self, id: u64, input: UbahTransaksi, oleh: u64) -> Result<Transaksi> {
+        if input.jumlah <= Decimal::ZERO {
+            return Err(Error::JumlahTidakValid);
+        }
+        if matches!(input.tipe, TipeTransaksi::TransferKeluar | TipeTransaksi::TransferMasuk) {
+            return Err(Error::Validasi(
+                "transfer harus dibuat lewat endpoint transfer".to_string(),
+            ));
+        }
+
+        let sebelum = self
+            .ambil_transaksi(id)
+            .await?
+            .ok_or(Error::NotFound { entitas: "transaksi" })?;
+        if sebelum.transfer_id.is_some() {
+            return Err(Error::Validasi(
+                "transfer belum bisa diubah dari sini".to_string(),
+            ));
+        }
+
+        let mut tx = self.pool.begin().await?;
+        self.cek_rekening_dan_kategori(&mut tx, input.rekening_id, input.kategori_id).await?;
+
+        sqlx::query(
+            "UPDATE fn_transaksi SET rekening_id = ?, kategori_id = ?, tipe = ?, jumlah = ?, tanggal = ?, catatan = ? \
+             WHERE id = ? AND organisasi_id = ? AND deleted_at IS NULL",
+        )
+        .bind(input.rekening_id)
+        .bind(input.kategori_id)
+        .bind(input.tipe.as_str())
+        .bind(input.jumlah)
+        .bind(input.tanggal)
+        .bind(&input.catatan)
+        .bind(id)
+        .bind(self.organisasi_id)
+        .execute(&mut *tx)
+        .await?;
+
+        let sesudah = Transaksi {
+            rekening_id: input.rekening_id,
+            kategori_id: input.kategori_id,
+            tipe: input.tipe,
+            jumlah: input.jumlah,
+            tanggal: input.tanggal,
+            catatan: input.catatan,
+            ..sebelum.clone()
+        };
+
+        catat_audit(
+            &mut tx,
+            self.organisasi_id,
+            Some(oleh),
+            "update",
+            "transaksi",
+            id,
+            serde_json::json!({
+                "sebelum": ringkas_transaksi(&sebelum),
+                "sesudah": ringkas_transaksi(&sesudah),
+            }),
+        )
+        .await?;
+
+        tx.commit().await?;
+        Ok(sesudah)
+    }
+
+    /// Menghapus transaksi dengan soft delete, supaya saldo dan riwayat audit tetap utuh.
+    /// Transfer ditolak karena dua barisnya harus dihapus bersama.
+    pub async fn hapus_transaksi_oleh(&self, id: u64, oleh: u64) -> Result<()> {
+        let ada = self
+            .ambil_transaksi(id)
+            .await?
+            .ok_or(Error::NotFound { entitas: "transaksi" })?;
+        if ada.transfer_id.is_some() {
+            return Err(Error::Validasi(
+                "transfer belum bisa dihapus dari sini".to_string(),
+            ));
+        }
+
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("UPDATE fn_transaksi SET deleted_at = ? WHERE id = ? AND organisasi_id = ? AND deleted_at IS NULL")
+            .bind(Utc::now())
+            .bind(id)
+            .bind(self.organisasi_id)
+            .execute(&mut *tx)
+            .await?;
+
+        catat_audit(
+            &mut tx,
+            self.organisasi_id,
+            Some(oleh),
+            "delete",
+            "transaksi",
+            id,
+            ringkas_transaksi(&ada),
+        )
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Rekening harus aktif dan milik organisasi ini. Kategori harus milik organisasi ini atau default global.
+    async fn cek_rekening_dan_kategori(
+        &self,
+        tx: &mut sqlx::Transaction<'_, MySql>,
+        rekening_id: u64,
+        kategori_id: Option<u64>,
+    ) -> Result<()> {
+        let rekening_aktif: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM fn_rekening \
+             WHERE id = ? AND organisasi_id = ? AND diarsipkan_at IS NULL",
+        )
+        .bind(rekening_id)
+        .bind(self.organisasi_id)
+        .fetch_one(&mut **tx)
+        .await?;
+        if rekening_aktif == 0 {
+            return Err(Error::NotFound { entitas: "rekening" });
+        }
+
+        if let Some(kategori_id) = kategori_id {
+            let kategori_dapat_dipakai: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM fn_kategori \
+                 WHERE id = ? AND (organisasi_id = ? OR organisasi_id IS NULL)",
+            )
+            .bind(kategori_id)
+            .bind(self.organisasi_id)
+            .fetch_one(&mut **tx)
+            .await?;
+            if kategori_dapat_dipakai == 0 {
+                return Err(Error::NotFound { entitas: "kategori" });
+            }
+        }
+        Ok(())
+    }
+
     /// Transfer tanpa kunci idempotensi.
     pub async fn buat_transfer(&self, input: NewTransfer) -> Result<Transfer> {
         self.buat_transfer_dengan_uuid(input, None).await.map(|(t, _)| t)
@@ -632,6 +771,18 @@ impl Tenant {
 
 /// Entri audit. Dipanggil di dalam transaksi DB yang sama dengan perubahannya,
 /// sehingga perubahan tanpa jejak tidak mungkin terjadi.
+/// Isi transaksi untuk audit. Berisi field yang bisa berubah, bukan id tenant atau token.
+fn ringkas_transaksi(t: &Transaksi) -> serde_json::Value {
+    serde_json::json!({
+        "rekening_id": t.rekening_id,
+        "kategori_id": t.kategori_id,
+        "tipe": t.tipe.as_str(),
+        "jumlah": t.jumlah.to_string(),
+        "tanggal": t.tanggal.to_string(),
+        "catatan": t.catatan,
+    })
+}
+
 async fn catat_audit(
     tx: &mut sqlx::Transaction<'_, MySql>,
     organisasi_id: u64,

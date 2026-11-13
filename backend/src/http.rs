@@ -872,6 +872,66 @@ async fn daftar_transaksi(
     ))
 }
 
+/// Isi perubahan transaksi dari klien. `dibuat_oleh` tidak diambil dari body; pelakunya dari sesi.
+#[derive(Deserialize)]
+struct TransaksiUbah {
+    rekening_id: u64,
+    kategori_id: Option<u64>,
+    tipe: TipeTransaksi,
+    jumlah: Decimal,
+    tanggal: NaiveDate,
+    catatan: Option<String>,
+}
+
+/// Owner dan admin boleh mengubah atau menghapus transaksi apa pun. Anggota hanya yang ia catat sendiri.
+async fn pastikan_boleh_ubah(tenant: &Tenant, a: &Anggota, id: u64) -> Result<(), ApiError> {
+    let transaksi = tenant
+        .ambil_transaksi(id)
+        .await?
+        .ok_or(Error::NotFound { entitas: "transaksi" })?;
+    if a.peran.boleh_kelola() || transaksi.dibuat_oleh == a.pengguna_id {
+        Ok(())
+    } else {
+        Err(Error::Validasi("Anggota hanya bisa mengubah atau menghapus transaksi yang dicatatnya sendiri.".to_string()).into())
+    }
+}
+
+async fn ubah_transaksi(
+    State(st): State<AppState>,
+    a: Anggota,
+    Path((_, id)): Path<(u64, u64)>,
+    Json(body): Json<TransaksiUbah>,
+) -> Result<Json<Transaksi>, ApiError> {
+    let tenant = Tenant::new(st.pool.clone(), a.organisasi_id);
+    pastikan_boleh_ubah(&tenant, &a, id).await?;
+    let transaksi = tenant
+        .ubah_transaksi_oleh(
+            id,
+            crate::model::UbahTransaksi {
+                rekening_id: body.rekening_id,
+                kategori_id: body.kategori_id,
+                tipe: body.tipe,
+                jumlah: body.jumlah,
+                tanggal: body.tanggal,
+                catatan: body.catatan,
+            },
+            a.pengguna_id,
+        )
+        .await?;
+    Ok(Json(transaksi))
+}
+
+async fn hapus_transaksi(
+    State(st): State<AppState>,
+    a: Anggota,
+    Path((_, id)): Path<(u64, u64)>,
+) -> Result<StatusCode, ApiError> {
+    let tenant = Tenant::new(st.pool.clone(), a.organisasi_id);
+    pastikan_boleh_ubah(&tenant, &a, id).await?;
+    tenant.hapus_transaksi_oleh(id, a.pengguna_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn ambil_transaksi(
     State(st): State<AppState>,
     a: Anggota,
@@ -1063,7 +1123,10 @@ pub fn router_dengan(pool: MySqlPool, pengirim: Arc<dyn Pengirim>, tautan_reset:
             "/api/v1/organisasi/{org}/transaksi",
             get(daftar_transaksi).post(buat_transaksi),
         )
-        .route("/api/v1/organisasi/{org}/transaksi/{id}", get(ambil_transaksi))
+        .route(
+            "/api/v1/organisasi/{org}/transaksi/{id}",
+            get(ambil_transaksi).patch(ubah_transaksi).delete(hapus_transaksi),
+        )
         .route(
             "/api/v1/organisasi/{org}/transaksi/ocr",
             post(baca_struk).layer(DefaultBodyLimit::max(BATAS_GAMBAR + 64 * 1024)),

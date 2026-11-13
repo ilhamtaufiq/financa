@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import { api, ambilSesi, unduhBukti, type BuktiServer, type Rekening, type Transaksi } from '../../lib/api';
 import { db } from '../../lib/db';
 import { ambilReferensi, EVENT_SINKRON, gabungkanDaftar, labelTipe, type BarisDaftar } from '../../lib/sinkron';
@@ -72,13 +72,157 @@ interface BerkasTampil {
 }
 
 /** Detail satu transaksi beserta bukti (foto struk, PDF) yang terlampir di server. */
-function DetailTransaksi({ baris, namaRekening, onTutup }: { baris: BarisDaftar; namaRekening: string; onTutup: () => void }) {
+/// Form ubah untuk transaksi yang sudah ada di server. Data lengkap diambil dulu supaya kategori tidak hilang saat disimpan.
+function FormUbah({
+  transaksiId,
+  rekening,
+  onBatal,
+  onSimpan,
+}: {
+  transaksiId: number;
+  rekening: Rekening[];
+  onBatal: () => void;
+  onSimpan: () => void;
+}) {
+  const [asli, setAsli] = useState<Transaksi | null>(null);
+  const [rekeningId, setRekeningId] = useState('');
+  const [tipe, setTipe] = useState<'pemasukan' | 'pengeluaran'>('pengeluaran');
+  const [jumlah, setJumlah] = useState('');
+  const [tanggal, setTanggal] = useState('');
+  const [catatan, setCatatan] = useState('');
+  const [galat, setGalat] = useState<string | null>(null);
+  const [sibuk, setSibuk] = useState(false);
+
+  useEffect(() => {
+    let batal = false;
+    api
+      .ambilTransaksi(transaksiId)
+      .then((t) => {
+        if (batal) return;
+        setAsli(t);
+        setRekeningId(String(t.rekening_id));
+        setTipe(t.tipe === 'pemasukan' ? 'pemasukan' : 'pengeluaran');
+        setJumlah(t.jumlah);
+        setTanggal(t.tanggal);
+        setCatatan(t.catatan ?? '');
+      })
+      .catch((e) => {
+        if (!batal) setGalat(e instanceof Error ? e.message : 'Transaksi belum bisa dimuat.');
+      });
+    return () => {
+      batal = true;
+    };
+  }, [transaksiId]);
+
+  async function simpan(e: FormEvent) {
+    e.preventDefault();
+    if (!asli) return;
+    const angka = Number(jumlah.replace(',', '.'));
+    if (!Number.isFinite(angka) || angka <= 0) return setGalat('Jumlah harus lebih dari 0.');
+    if (!rekeningId) return setGalat('Pilih rekening.');
+    setSibuk(true);
+    setGalat(null);
+    try {
+      await api.ubahTransaksi(transaksiId, {
+        rekening_id: Number(rekeningId),
+        kategori_id: asli.kategori_id,
+        tipe,
+        jumlah: jumlah.replace(',', '.'),
+        tanggal,
+        catatan: catatan.trim() || null,
+      });
+      onSimpan();
+    } catch (err) {
+      setGalat(err instanceof Error ? err.message : 'Perubahan belum tersimpan.');
+      setSibuk(false);
+    }
+  }
+
+  if (!asli && !galat) return <p className="text-sm text-redup">Memuat…</p>;
+
+  return (
+    <form onSubmit={simpan} className="space-y-4">
+      <label className="block space-y-1 text-sm">
+        <span className="font-semibold">Rekening</span>
+        <select className="masukan w-full" value={rekeningId} onChange={(e) => setRekeningId(e.target.value)}>
+          {rekening.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.nama}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="font-semibold">Tipe</span>
+        <select className="masukan w-full" value={tipe} onChange={(e) => setTipe(e.target.value as 'pemasukan' | 'pengeluaran')}>
+          <option value="pemasukan">Pemasukan</option>
+          <option value="pengeluaran">Pengeluaran</option>
+        </select>
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="font-semibold">Jumlah</span>
+        <input className="masukan w-full" inputMode="decimal" value={jumlah} onChange={(e) => setJumlah(e.target.value)} />
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="font-semibold">Tanggal</span>
+        <input type="date" className="masukan w-full" value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
+      </label>
+      <label className="block space-y-1 text-sm">
+        <span className="font-semibold">Catatan</span>
+        <input className="masukan w-full" value={catatan} maxLength={500} onChange={(e) => setCatatan(e.target.value)} />
+      </label>
+      {galat && <p role="alert" className="text-sm text-bahaya">{galat}</p>}
+      <div className="flex flex-wrap gap-3">
+        <button type="submit" className="tombol-utama min-h-11" disabled={sibuk || !asli}>
+          {sibuk ? 'Menyimpan…' : 'Simpan'}
+        </button>
+        <button type="button" className="tombol-garis min-h-11" onClick={onBatal} disabled={sibuk}>
+          Batal
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DetailTransaksi({
+  baris,
+  namaRekening,
+  rekening,
+  onTutup,
+  onBerubah,
+}: {
+  baris: BarisDaftar;
+  namaRekening: string;
+  rekening: Rekening[];
+  onTutup: () => void;
+  onBerubah: () => void;
+}) {
   const idJudul = useId();
   const [berkas, setBerkas] = useState<BerkasTampil[]>([]);
   const [memuatBukti, setMemuatBukti] = useState(false);
   const [galat, setGalat] = useState<string | null>(null);
   const masuk = baris.tipe === 'pemasukan';
   const keluar = baris.tipe === 'pengeluaran';
+  // Hanya transaksi biasa yang sudah di server. Transfer dan entri yang belum terkirim tidak bisa diubah dari sini.
+  const idServer = baris.server_id;
+  const bisaDiubah = idServer !== null && (baris.tipe === 'pemasukan' || baris.tipe === 'pengeluaran');
+  const [mode, setMode] = useState<'lihat' | 'ubah'>('lihat');
+  const [hapusTanya, setHapusTanya] = useState(false);
+  const [sibukAksi, setSibukAksi] = useState(false);
+  const [galatAksi, setGalatAksi] = useState<string | null>(null);
+
+  async function hapus() {
+    if (idServer === null) return;
+    setSibukAksi(true);
+    setGalatAksi(null);
+    try {
+      await api.hapusTransaksi(idServer);
+      onBerubah();
+    } catch (err) {
+      setGalatAksi(err instanceof Error ? err.message : 'Transaksi belum bisa dihapus.');
+      setSibukAksi(false);
+    }
+  }
 
   useEffect(() => {
     if (baris.server_id === null) return;
@@ -158,6 +302,35 @@ function DetailTransaksi({ baris, namaRekening, onTutup }: { baris: BarisDaftar;
             <dd className="text-right font-semibold break-words">{baris.catatan || '—'}</dd>
           </div>
         </dl>
+
+        {bisaDiubah && idServer !== null && mode === 'ubah' && (
+          <FormUbah transaksiId={idServer} rekening={rekening} onBatal={() => setMode('lihat')} onSimpan={onBerubah} />
+        )}
+
+        {bisaDiubah && mode === 'lihat' && (
+          <div className="space-y-3">
+            {galatAksi && <p role="alert" className="text-sm text-bahaya">{galatAksi}</p>}
+            <div className="flex flex-wrap gap-3">
+              <button type="button" className="tombol-garis min-h-11" onClick={() => setMode('ubah')}>
+                Ubah
+              </button>
+              {!hapusTanya ? (
+                <button type="button" className="tombol-garis min-h-11 text-bahaya" onClick={() => setHapusTanya(true)}>
+                  Hapus
+                </button>
+              ) : (
+                <>
+                  <button type="button" className="tombol-utama min-h-11" disabled={sibukAksi} onClick={hapus}>
+                    {sibukAksi ? 'Menghapus…' : 'Ya, hapus transaksi'}
+                  </button>
+                  <button type="button" className="tombol-garis min-h-11" onClick={() => setHapusTanya(false)} disabled={sibukAksi}>
+                    Batal
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {baris.status !== 'server' && (
           <p className="rounded-[20px] bg-inset px-4 py-3 text-sm text-redup">
@@ -375,7 +548,12 @@ export default function DaftarTransaksi() {
         <DetailTransaksi
           baris={dipilih}
           namaRekening={namaRekening(dipilih.rekening_id)}
+          rekening={rekening}
           onTutup={() => setDipilih(null)}
+          onBerubah={() => {
+            setDipilih(null);
+            void muat();
+          }}
         />
       )}
     </section>
