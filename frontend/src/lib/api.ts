@@ -190,7 +190,7 @@ export interface SesiMasuk {
 
 async function kirimKe<T>(
   apiUrl: string,
-  metode: 'GET' | 'POST' | 'PATCH',
+  metode: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   token: string | null,
   badan?: unknown,
@@ -344,7 +344,7 @@ export async function bacaStruk(berkas: File): Promise<UsulanStruk> {
 }
 
 /** Panggilan data untuk organisasi di sesi aktif. */
-async function panggil<T>(metode: 'GET' | 'POST' | 'PATCH', path: string, badan?: unknown): Promise<T> {
+async function panggil<T>(metode: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, badan?: unknown): Promise<T> {
   const sesi = ambilSesi();
   if (!sesi) throw new ApiError(401, 'Belum masuk. Masuk terlebih dahulu untuk melanjutkan.');
   return kirimKe<T>(sesi.apiUrl, metode, `/api/v1/organisasi/${sesi.organisasiId}${path}`, sesi.token, badan);
@@ -361,6 +361,12 @@ export const api = {
   kategori: () => panggil<Kategori[]>('GET', '/kategori'),
   daftarTransaksi: (dari: string, sampai: string) =>
     panggil<Transaksi[]>('GET', `/transaksi?dari=${dari}&sampai=${sampai}`),
+  ambilTransaksi: (id: number) => panggil<Transaksi>('GET', `/transaksi/${id}`),
+  ubahTransaksi: (
+    id: number,
+    b: { rekening_id: number; kategori_id: number | null; tipe: 'pemasukan' | 'pengeluaran'; jumlah: string; tanggal: string; catatan: string | null },
+  ) => panggil<Transaksi>('PATCH', `/transaksi/${id}`, b),
+  hapusTransaksi: (id: number) => panggil<void>('DELETE', `/transaksi/${id}`),
   buatTransaksi: (b: TransaksiBaru) => panggil<Transaksi>('POST', '/transaksi', b),
   daftarBukti: (transaksiId: number) => panggil<BuktiServer[]>('GET', `/transaksi/${transaksiId}/bukti`),
   buatTransfer: (b: TransferBaru) => panggil<Transfer>('POST', '/transfer', b),

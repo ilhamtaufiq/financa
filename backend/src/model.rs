@@ -213,6 +213,17 @@ pub struct NewTransaksi {
     pub dibuat_oleh: u64,
 }
 
+/// Isi transaksi yang diubah. Hanya pemasukan dan pengeluaran. Transfer tidak lewat sini.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UbahTransaksi {
+    pub rekening_id: u64,
+    pub kategori_id: Option<u64>,
+    pub tipe: TipeTransaksi,
+    pub jumlah: Decimal,
+    pub tanggal: NaiveDate,
+    pub catatan: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct NewTransfer {
     pub rekening_asal_id: u64,
